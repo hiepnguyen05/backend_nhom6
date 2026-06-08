@@ -1,0 +1,85 @@
+@Host = http://localhost:5135
+@AdminEmail = admin@shop.com
+@AdminPassword = Admin@123
+
+### 1. Login as Seeded Admin
+# @name adminLogin
+POST {{Host}}/api/Auth/login
+Content-Type: application/json
+
+{
+  "email": "{{AdminEmail}}",
+  "password": "{{AdminPassword}}"
+}
+
+### Save Admin Token
+@AdminToken = {{adminLogin.response.body.accessToken}}
+
+### 2. Register New User
+POST {{Host}}/api/Auth/register
+Content-Type: application/json
+
+{
+  "email": "customer@shop.com",
+  "password": "Customer@123",
+  "fullName": "Nguyen Van A",
+  "phone": "0987654321"
+}
+
+### 3. Login as New Customer
+# @name customerLogin
+POST {{Host}}/api/Auth/login
+Content-Type: application/json
+
+{
+  "email": "customer@shop.com",
+  "password": "Customer@123"
+}
+
+### Save Customer Token and ID
+@CustomerToken = {{customerLogin.response.body.accessToken}}
+@CustomerId = {{customerLogin.response.body.user.id}}
+
+### 4. Get Current User Profile (Using Customer Token)
+GET {{Host}}/api/Users/{{CustomerId}}
+Authorization: Bearer {{CustomerToken}}
+
+### 5. Change Password (Using Customer Token)
+PUT {{Host}}/api/Users/{{CustomerId}}/password
+Authorization: Bearer {{CustomerToken}}
+Content-Type: application/json
+
+{
+  "currentPassword": "Customer@123",
+  "newPassword": "NewPassword@123"
+}
+
+### 6. Admin: Get All Users (Requires Admin Token)
+GET {{Host}}/api/Users
+Authorization: Bearer {{AdminToken}}
+
+### 7. Admin: Create a New User
+POST {{Host}}/api/Users
+Authorization: Bearer {{AdminToken}}
+Content-Type: application/json
+
+{
+  "email": "sales_staff@shop.com",
+  "password": "Sales@123456",
+  "fullName": "Staff Sales",
+  "phone": "0123999888",
+  "role": 1
+}
+
+### 8. Admin: Get Daily Revenue Report
+GET {{Host}}/api/Reports/daily-revenue?startDate=2026-06-01&endDate=2026-06-30
+Authorization: Bearer {{AdminToken}}
+
+### 9. Admin: Get Top Selling Products Report
+GET {{Host}}/api/Reports/top-selling-products?topN=5
+Authorization: Bearer {{AdminToken}}
+
+### 10. Admin: Get Top Customers Report
+GET {{Host}}/api/Reports/top-customers?topN=5
+Authorization: Bearer {{AdminToken}}
+

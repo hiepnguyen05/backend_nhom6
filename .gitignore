@@ -1,0 +1,37 @@
+## Build and Release Folders
+[Bb]in/
+[Oo]bj/
+[Xx]64/
+[Xx]86/
+[Dd]ebug/
+[Rr]elease/
+
+## Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Rider / Resharper
+.idea/
+*.sln.DotSettings.user
+
+## OS Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+## Mono Auto Generated Files
+mono_crash.*
+
+## Web
+node_modules/
