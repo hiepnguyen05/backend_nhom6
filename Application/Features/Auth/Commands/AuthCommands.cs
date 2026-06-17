@@ -69,12 +69,10 @@ public record RegisterCommand(string Email, string Password, string FullName, st
 public class RegisterCommandHandler : IRequestHandler<RegisterCommand, UserProfileDto>
 {
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IEventPublisher _eventPublisher;
 
-    public RegisterCommandHandler(IUnitOfWork unitOfWork, IEventPublisher eventPublisher)
+    public RegisterCommandHandler(IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
-        _eventPublisher = eventPublisher;
     }
 
     public async Task<UserProfileDto> Handle(RegisterCommand request, CancellationToken cancellationToken)
@@ -94,11 +92,6 @@ public class RegisterCommandHandler : IRequestHandler<RegisterCommand, UserProfi
 
         await _unitOfWork.Users.AddAsync(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        // Publish event
-        var userCreatedEvent = new UserCreatedEvent(
-            user.Id, user.Email, user.FullName, user.Phone, user.Role, user.Status, user.CreatedAt);
-        await _eventPublisher.PublishAsync("user.created", userCreatedEvent, cancellationToken);
 
         return new UserProfileDto
         {

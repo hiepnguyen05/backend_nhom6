@@ -96,19 +96,27 @@ public class ReportRepository : IReportRepository
             query = query.Where(p => p.Date <= end);
         }
 
-        return await query
+        var results = await query
             .GroupBy(p => new { p.ProductId, p.ProductName })
-            .Select(g => new ProductSold
+            .Select(g => new
             {
                 ProductId = g.Key.ProductId,
                 ProductName = g.Key.ProductName,
                 TotalQuantitySold = g.Sum(p => p.TotalQuantitySold),
-                TotalRevenue = g.Sum(p => p.TotalRevenue),
-                Date = fromDate ?? DateTime.MinValue
+                TotalRevenue = g.Sum(p => p.TotalRevenue)
             })
             .OrderByDescending(p => p.TotalQuantitySold)
             .Take(top)
             .ToListAsync();
+
+        return results.Select(p => new ProductSold
+        {
+            ProductId = p.ProductId,
+            ProductName = p.ProductName,
+            TotalQuantitySold = p.TotalQuantitySold,
+            TotalRevenue = p.TotalRevenue,
+            Date = fromDate ?? DateTime.MinValue
+        });
     }
 
     // Customers Spent

@@ -1,6 +1,5 @@
 using MediatR;
 using UserReportService.Application.DTOs;
-using UserReportService.Application.Interfaces;
 using UserReportService.Domain.Entities;
 using UserReportService.Domain.Enums;
 using UserReportService.Domain.Interfaces;
@@ -13,12 +12,10 @@ public record CreateUserCommand(string Email, string Password, string FullName, 
 public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, UserProfileDto>
 {
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IEventPublisher _eventPublisher;
 
-    public CreateUserCommandHandler(IUnitOfWork unitOfWork, IEventPublisher eventPublisher)
+    public CreateUserCommandHandler(IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
-        _eventPublisher = eventPublisher;
     }
 
     public async Task<UserProfileDto> Handle(CreateUserCommand request, CancellationToken cancellationToken)
@@ -38,11 +35,6 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, UserP
 
         await _unitOfWork.Users.AddAsync(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        // Publish event
-        var userCreatedEvent = new UserCreatedEvent(
-            user.Id, user.Email, user.FullName, user.Phone, user.Role, user.Status, user.CreatedAt);
-        await _eventPublisher.PublishAsync("user.created", userCreatedEvent, cancellationToken);
 
         return MapToProfileDto(user);
     }
@@ -65,12 +57,10 @@ public record UpdateUserCommand(Guid Id, string? FullName, string? Phone, UserSt
 public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, UserProfileDto>
 {
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IEventPublisher _eventPublisher;
 
-    public UpdateUserCommandHandler(IUnitOfWork unitOfWork, IEventPublisher eventPublisher)
+    public UpdateUserCommandHandler(IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
-        _eventPublisher = eventPublisher;
     }
 
     public async Task<UserProfileDto> Handle(UpdateUserCommand request, CancellationToken cancellationToken)
@@ -86,11 +76,6 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, UserP
 
         await _unitOfWork.Users.UpdateAsync(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        // Publish event
-        var userUpdatedEvent = new UserUpdatedEvent(
-            user.Id, user.FullName, user.Phone, user.Status, user.UpdatedAt ?? DateTime.UtcNow);
-        await _eventPublisher.PublishAsync("user.updated", userUpdatedEvent, cancellationToken);
 
         return new UserProfileDto
         {
@@ -111,12 +96,10 @@ public record DeleteUserCommand(Guid Id) : IRequest<Unit>;
 public class DeleteUserCommandHandler : IRequestHandler<DeleteUserCommand, Unit>
 {
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IEventPublisher _eventPublisher;
 
-    public DeleteUserCommandHandler(IUnitOfWork unitOfWork, IEventPublisher eventPublisher)
+    public DeleteUserCommandHandler(IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
-        _eventPublisher = eventPublisher;
     }
 
     public async Task<Unit> Handle(DeleteUserCommand request, CancellationToken cancellationToken)
@@ -126,9 +109,6 @@ public class DeleteUserCommandHandler : IRequestHandler<DeleteUserCommand, Unit>
 
         await _unitOfWork.Users.DeleteAsync(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        // Publish event
-        await _eventPublisher.PublishAsync("user.deleted", new UserDeletedEvent(user.Id), cancellationToken);
 
         return Unit.Value;
     }

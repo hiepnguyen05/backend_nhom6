@@ -17,7 +17,7 @@ public interface ICacheService
     Task SetAsync<T>(string key, T value, TimeSpan? expiration = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Xóa dữ liệu cache theo key (Invalidate khi có dữ liệu mới từ Kafka).
+    /// Xóa dữ liệu cache theo key (Invalidate khi có dữ liệu mới từ API Gateway).
     /// </summary>
     Task RemoveAsync(string key, CancellationToken cancellationToken = default);
 

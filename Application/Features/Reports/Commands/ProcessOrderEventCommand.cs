@@ -8,7 +8,7 @@ using UserReportService.Domain.Interfaces;
 namespace UserReportService.Application.Features.Reports.Commands;
 
 /// <summary>
-/// Command xử lý sự kiện đơn hàng mới từ Kafka.
+/// Command xử lý sự kiện đơn hàng mới từ API Gateway (HTTP POST).
 /// Sau khi cập nhật SQL Server, sẽ invalidate (xóa) toàn bộ cache báo cáo trong Redis
 /// để đảm bảo lần đọc tiếp theo sẽ lấy dữ liệu mới nhất.
 /// </summary>

@@ -6,7 +6,6 @@ using UserReportService.Application.Interfaces;
 using UserReportService.Application.Features.Auth.Commands;
 using UserReportService.Domain.Interfaces;
 using UserReportService.Infrastructure.Data;
-using UserReportService.Infrastructure.Messaging;
 using UserReportService.Infrastructure.Repositories;
 using UserReportService.Infrastructure.Security;
 using UserReportService.Infrastructure.Services;
@@ -14,7 +13,30 @@ using UserReportService.Api.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Force Kestrel to listen on both 80 and 5000, overriding docker-compose env vars
+builder.Configuration["ASPNETCORE_HTTP_PORTS"] = "80;5000";
+
+// Ensure it listens on both 80 (for external map) and 5000 (for internal gateway)
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(80);
+    options.ListenAnyIP(5000);
+});
+
+// Add CORS Policy
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173", "https://braylen-noisiest-biennially.ngrok-free.dev")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 // Add services to the container.
+builder.Services.AddRouting(options => options.LowercaseUrls = true); // Ép toàn bộ URL thành chữ thường (lowercase)
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
@@ -65,10 +87,6 @@ builder.Services.AddScoped<ICacheService, CacheService>();
 
 // Infrastructure Services
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
-builder.Services.AddSingleton<IEventPublisher, KafkaPublisher>();
-
-// Background Services
-builder.Services.AddHostedService<KafkaOrderConsumer>();
 
 // JWT Authentication Configuration
 var jwtKey = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret is missing");
@@ -85,34 +103,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
-        
-        options.Events = new JwtBearerEvents
-        {
-            OnChallenge = async context =>
-            {
-                // Hủy bỏ response mặc định của .NET
-                context.HandleResponse();
-                
-                context.Response.StatusCode = 401;
-                context.Response.ContentType = "application/json";
-                var response = new { success = false, message = "Bạn cần đăng nhập để thực hiện chức năng này (Token không hợp lệ hoặc đã bị thiếu)", statusCode = 401 };
-                var jsonOptions = new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase };
-                await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(response, jsonOptions));
-            },
-            OnForbidden = async context =>
-            {
-                context.Response.StatusCode = 403;
-                context.Response.ContentType = "application/json";
-                var response = new { success = false, message = "Tài khoản của bạn không có đủ quyền (Role) để truy cập tài nguyên này", statusCode = 403 };
-                var jsonOptions = new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase };
-                await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(response, jsonOptions));
-            }
-        };
     });
 
 var app = builder.Build();
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
+
+app.UseStaticFiles();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -120,7 +117,12 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseCors("AllowFrontend");
+
 app.UseHttpsRedirection();
+
+// Sử dụng Middleware tự viết để xử lý lỗi 401/403 thay vì nhét chung vào khai báo JWT
+app.UseMiddleware<AuthMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();

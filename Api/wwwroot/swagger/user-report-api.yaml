@@ -1,0 +1,447 @@
+openapi: 3.0.3
+info:
+  title: User & Report Service API (Official)
+  description: |
+    # Tài liệu Thiết kế API Chính thức - Nhóm 6
+    **Service**: User & Report Service
+    **Bối cảnh**: Hệ thống Quản lý Bán hàng & Kho hàng (Đề tài 1)
+
+    Tài liệu này định nghĩa chi tiết toàn bộ các API do Nhóm 6 cung cấp.
+
+    ---
+
+    ## NHỮNG GÌ NHÓM 6 CUNG CẤP
+    1. **JWT Token**: Dùng chung Secret Key để xác thực. Các nhóm dùng chung key để kiểm tra token.
+    2. **API Auth & Users**: Đăng ký, đăng nhập và quản lý người dùng.
+    3. **API Reports**: Lấy dữ liệu báo cáo thống kê.
+    4. **API Events Webhook**: Điểm tiếp nhận sự kiện tạo đơn hàng từ Order Service.
+
+    ---
+
+    ## YÊU CẦU CHO NHÓM ORDER SERVICE (NHÓM 4)
+    Để giao tiếp giữa các microservices, hệ thống sử dụng cơ chế HTTP Webhook thông qua **API Gateway**.
+    - **Nếu có API Gateway chung (vd: Ocelot/Nginx)**: Vui lòng cấu hình Gateway định tuyến (route) đường dẫn `/api/events/order-created` về cổng `5000` của container `user-report-api`. Nhóm Order sẽ bắn HTTP POST vào API Gateway.
+    - **Nếu gọi trực tiếp (Local test)**: Gửi thẳng HTTP POST request đến `http://localhost:5000/api/events/order-created`.
+    
+    Yêu cầu gửi kèm Body chuẩn JSON (như schema bên dưới) mỗi khi khách hàng thanh toán xong. Không yêu cầu Token (Bypass Auth).
+  version: 1.1.0
+  contact:
+    name: Nhóm 6 - User & Report
+
+servers:
+  - url: http://localhost:5000
+    description: Cổng mặc định khi chạy Docker Compose
+
+tags:
+  - name: Auth
+    description: Đăng nhập, đăng ký, refresh token
+  - name: Users
+    description: Quản lý tài khoản người dùng
+  - name: Reports
+    description: Báo cáo doanh thu và top thống kê
+  - name: Events
+    description: Webhook nhận sự kiện từ các service khác (Order Service)
+
+paths:
+  # ──────────── AUTH ────────────
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Đăng nhập — Cấp JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Đăng nhập thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Lỗi Validate (Thiếu trường)
+        "401":
+          description: Sai email hoặc mật khẩu
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Đăng ký tài khoản mới (Mặc định Role là Customer)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "200":
+          description: Đăng ký thành công
+        "400":
+          description: Email đã tồn tại hoặc dữ liệu không hợp lệ
+
+  /api/auth/refresh-token:
+    post:
+      tags: [Auth]
+      summary: Làm mới access token bằng refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Token mới
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Refresh token không hợp lệ hoặc hết hạn
+
+  # ──────────── USERS ────────────
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: Lấy danh sách tài khoản (Chỉ Admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Danh sách users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserProfileDto"
+        "401":
+          description: Chưa đăng nhập
+        "403":
+          description: Không có quyền Admin
+
+    post:
+      tags: [Users]
+      summary: Tạo tài khoản nhân viên/quản trị (Chỉ Admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Tạo thành công
+        "400":
+          description: Lỗi dữ liệu
+        "403":
+          description: Không có quyền Admin
+
+  /api/users/{id}:
+    get:
+      tags: [Users]
+      summary: Lấy thông tin chi tiết tài khoản
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Thông tin user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileDto"
+        "404":
+          description: Không tìm thấy
+
+    put:
+      tags: [Users]
+      summary: Cập nhật thông tin tài khoản
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: Cập nhật thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileDto"
+
+    delete:
+      tags: [Users]
+      summary: Xoá tài khoản (Chỉ Admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Xoá thành công
+        "403":
+          description: Không có quyền Admin
+
+  /api/users/{id}/password:
+    put:
+      tags: [Users]
+      summary: Thay đổi mật khẩu
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204":
+          description: Đổi mật khẩu thành công
+
+  # ──────────── REPORTS ────────────
+
+  /api/reports/daily-revenue:
+    get:
+      tags: [Reports]
+      summary: Lấy doanh thu theo ngày (Chỉ Admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: endDate
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Danh sách doanh thu các ngày
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyRevenueDto"
+
+  /api/reports/top-selling-products:
+    get:
+      tags: [Reports]
+      summary: Top sản phẩm bán chạy (Chỉ Admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: topN
+          in: query
+          schema: { type: integer, default: 10 }
+        - name: startDate
+          in: query
+          schema: { type: string, format: date-time }
+        - name: endDate
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Danh sách sản phẩm
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductSoldDto"
+
+  /api/reports/top-customers:
+    get:
+      tags: [Reports]
+      summary: Top khách hàng theo doanh số (Chỉ Admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: topN
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Danh sách khách hàng
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomerSpentDto"
+
+  # ──────────── EVENTS WEBHOOK ────────────
+
+  /api/events/order-created:
+    post:
+      tags: [Events]
+      summary: "[Dành cho Order Service] Gửi sự kiện tạo đơn hàng"
+      description: Nhận Webhook từ Order Service để cập nhật dữ liệu báo cáo thống kê.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderCreatedEvent"
+      responses:
+        "200":
+          description: Nhận và xử lý thành công
+        "500":
+          description: Lỗi máy chủ khi xử lý sự kiện
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: "admin@shop.com" }
+        password: { type: string, format: password, example: "Admin@123" }
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresAt: { type: string, format: date-time }
+        user: { $ref: "#/components/schemas/UserProfileDto" }
+
+    RegisterRequest:
+      type: object
+      required: [email, password, fullName]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        fullName: { type: string }
+        phone: { type: string }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    UserProfileDto:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        fullName: { type: string }
+        phone: { type: string }
+        role:
+          type: integer
+          description: "0 = Admin, 1 = Sales, 2 = Warehouse, 3 = Customer"
+        status:
+          type: integer
+          description: "0 = Active, 1 = Inactive, 2 = Banned"
+        createdAt: { type: string, format: date-time }
+
+    CreateUserRequest:
+      type: object
+      required: [email, password, fullName, role]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        fullName: { type: string }
+        phone: { type: string }
+        role:
+          type: integer
+          description: "0 = Admin, 1 = Sales, 2 = Warehouse, 3 = Customer"
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        fullName: { type: string }
+        phone: { type: string }
+        status:
+          type: integer
+          description: "0 = Active, 1 = Inactive, 2 = Banned"
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string }
+        newPassword: { type: string, minLength: 8 }
+
+    DailyRevenueDto:
+      type: object
+      properties:
+        date: { type: string, format: date-time }
+        totalRevenue: { type: number, format: decimal }
+        totalOrders: { type: integer }
+
+    ProductSoldDto:
+      type: object
+      properties:
+        date: { type: string, format: date-time }
+        productId: { type: string, format: uuid }
+        productName: { type: string }
+        totalQuantitySold: { type: integer }
+        totalRevenue: { type: number, format: decimal }
+
+    CustomerSpentDto:
+      type: object
+      properties:
+        customerId: { type: string, format: uuid }
+        customerName: { type: string }
+        totalOrders: { type: integer }
+        totalSpent: { type: number, format: decimal }
+        lastOrderDate: { type: string, format: date-time, nullable: true }
+
+    OrderCreatedEvent:
+      type: object
+      properties:
+        orderId: { type: string, format: uuid }
+        customerId: { type: string, format: uuid }
+        customerName: { type: string }
+        totalAmount: { type: number, format: decimal }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItemDto"
+
+    OrderItemDto:
+      type: object
+      properties:
+        productId: { type: string, format: uuid }
+        productName: { type: string }
+        quantity: { type: integer }
+        unitPrice: { type: number, format: decimal }
